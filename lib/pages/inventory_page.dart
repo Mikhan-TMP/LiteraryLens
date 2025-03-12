@@ -40,75 +40,73 @@ class _InventoryPageState extends State<InventoryPage> {
   }
 
   Future<void> _processScannedTag(NfcTag tag) async {
-    final Map<String, dynamic>? data = tag.data;
-    if (data != null) {
-      try {
-        // Extract and convert the RFID value first
-        String rfidValue = _kohaService.extractIdentifier(data.toString());
-        
-        // Extract just the numeric RFID from the debug string
-        final RegExp rfidRegex = RegExp(r'Corrected RFID: (\d+)');
-        final match = rfidRegex.firstMatch(rfidValue);
-        final convertedRfid = match?.group(1) ?? '';
+    final Map<String, dynamic> data = tag.data;
+    try {
+      // Extract and convert the RFID value first
+      String rfidValue = _kohaService.extractIdentifier(data.toString());
+      
+      // Extract just the numeric RFID from the debug string
+      final RegExp rfidRegex = RegExp(r'Corrected RFID: (\d+)');
+      final match = rfidRegex.firstMatch(rfidValue);
+      final convertedRfid = match?.group(1) ?? '';
 
-        // Use the converted RFID to fetch book data
-        final bookData = await _kohaService.getBookByRfid(convertedRfid);
-        
-        // // Add debug display
-        // showDialog(
-        //   context: context,
-        //   builder: (context) => AlertDialog(
-        //     title: const Text('Book Data Debug Info'),
-        //     content: SingleChildScrollView(
-        //       child: Column(
-        //         crossAxisAlignment: CrossAxisAlignment.start,
-        //         mainAxisSize: MainAxisSize.min,
-        //         children: [
-        //           Text('RFID: $convertedRfid'),
-        //           const Divider(),
-        //           Text('Raw Book Data:'),
-        //           Text(bookData.toString()),
-        //         ],
-        //       ),
-        //     ),
-        //     actions: [
-        //       TextButton(
-        //         onPressed: () => Navigator.pop(context),
-        //         child: const Text('Close'),
-        //       ),
-        //     ],
-        //   ),
-        // );
-        
-        setState(() {
-          scannedBooks.add({
-            'title': bookData?['title'] ?? 'Unknown Title',
-            'isbn': bookData?['isbn'] ?? 'No ISBN',
-            'author': bookData?['author'] ?? 'Unknown Author',
-            'biblioId': bookData?['biblio_id']?.toString() ?? '',
-            'availability': bookData?['bookable'] == true ? 'Available' : 'Not Available',
-            'timestamp': DateFormat('MMMM d, yyyy \'at\' h:mma').format(DateTime.now()),
-          });
-          booksScanned++;
+      // Use the converted RFID to fetch book data
+      final bookData = await _kohaService.getBookByRfid(convertedRfid);
+      
+      // // Add debug display
+      // showDialog(
+      //   context: context,
+      //   builder: (context) => AlertDialog(
+      //     title: const Text('Book Data Debug Info'),
+      //     content: SingleChildScrollView(
+      //       child: Column(
+      //         crossAxisAlignment: CrossAxisAlignment.start,
+      //         mainAxisSize: MainAxisSize.min,
+      //         children: [
+      //           Text('RFID: $convertedRfid'),
+      //           const Divider(),
+      //           Text('Raw Book Data:'),
+      //           Text(bookData.toString()),
+      //         ],
+      //       ),
+      //     ),
+      //     actions: [
+      //       TextButton(
+      //         onPressed: () => Navigator.pop(context),
+      //         child: const Text('Close'),
+      //       ),
+      //     ],
+      //   ),
+      // );
+      
+      setState(() {
+        scannedBooks.add({
+          'title': bookData?['title'] ?? 'Unknown Title',
+          'isbn': bookData?['isbn'] ?? 'No ISBN',
+          'author': bookData?['author'] ?? 'Unknown Author',
+          'biblioId': bookData?['biblio_id']?.toString() ?? '',
+          'availability': bookData?['bookable'] == true ? 'Available' : 'Not Available',
+          'timestamp': DateFormat('MMMM d, yyyy \'at\' h:mma').format(DateTime.now()),
         });
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                e.toString().contains('RFID not registered') 
-                  // ? 'RFID not registered.\nTag data formats:\n${_kohaService.extractIdentifier(data.toString())}'
-                  ? 'RFID not registered to any book in the database.'
-                  : 'Error fetching book data',
-              ),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5), // 
+        booksScanned++;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('RFID not registered') 
+                // ? 'RFID not registered.\nTag data formats:\n${_kohaService.extractIdentifier(data.toString())}'
+                ? 'RFID not registered to any book in the database.'
+                : 'Error fetching book data',
             ),
-          );
-        }
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5), // 
+          ),
+        );
       }
     }
-  }
+    }
 
   Future<void> _startScanning() async {
     setState(() {
@@ -182,146 +180,250 @@ class _InventoryPageState extends State<InventoryPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inventory Management'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: () {
+              // Show help dialog
+            },
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildStatusCard(),
+            _buildControlPanel(),
+            _buildScannedBooksList(),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: isReadyToScan ? _stopScanning : _startScanning,
+        icon: Icon(isReadyToScan ? Icons.stop : Icons.play_arrow),
+        label: Text(isReadyToScan ? 'Stop' : 'Start'),
+        backgroundColor: isReadyToScan ? Colors.red : Colors.green,
+      ),
+    );
+  }
+
+  Widget _buildStatusCard() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).primaryColor.withAlpha((0.8 * 255).toInt()),
+            Theme.of(context).primaryColor,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withAlpha((0.3 * 255).toInt()),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title Section
-          const Text(
-            'Inventory Management',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      'Status: ',
-                      style: TextStyle(fontSize: 16),
+          Row(
+            children: [
+              Icon(
+                isReadyToScan ? Icons.wifi : Icons.wifi_off,
+                color: Colors.white,
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isSearchingScanner ? 'Searching...' : 
+                      (isReadyToScan ? 'Scanner Ready' : 'Scanner Off'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                    if (isSearchingScanner)
-                      const Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Searching for Scanner...',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange,
-                            ),
-                          ),
-                        ],
-                      )
-                    else
-                      Text(
-                        isReadyToScan ? 'Ready to Scan' : 'Not Ready',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isReadyToScan ? Colors.green : Colors.red,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Books Scanned: $booksScanned',
-                  style: const TextStyle(fontSize: 16),
+                  ),
+                  Text(
+                    '$booksScanned books scanned',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              if (isSearchingScanner) ...[
+                const Spacer(),
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    strokeWidth: 2,
+                  ),
                 ),
               ],
-            ),
-          ),
-
-          // Control Buttons
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              ElevatedButton.icon(
-                onPressed: isReadyToScan ? null : _startScanning,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Start'),
-              ),
-              ElevatedButton.icon(
-                onPressed: isReadyToScan ? _stopScanning : null,
-                icon: const Icon(Icons.stop),
-                label: const Text('Stop'),
-              ),
-              ElevatedButton.icon(
-                onPressed: scannedBooks.isEmpty ? null : () {
-                  // Add sync functionality
-                },
-                icon: const Icon(Icons.sync),
-                label: const Text('Sync'),
-              ),
             ],
           ),
+        ],
+      ),
+    );
+  }
 
-          // Scanned Books List
-          const SizedBox(height: 20),
-          const Text(
-            'Scanned Books',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+  Widget _buildControlPanel() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildActionButton(
+            icon: Icons.refresh,
+            label: 'Clear',
+            onPressed: scannedBooks.isNotEmpty ? () {
+              setState(() {
+                scannedBooks.clear();
+                booksScanned = 0;
+              });
+            } : null,
+          ),
+          _buildActionButton(
+            icon: Icons.sync,
+            label: 'Sync',
+            onPressed: scannedBooks.isNotEmpty ? () {
+              // Add sync functionality
+            } : null,
+          ),
+          _buildActionButton(
+            icon: Icons.save,
+            label: 'Export',
+            onPressed: scannedBooks.isNotEmpty ? () {
+              // Add export functionality
+            } : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
+  Widget _buildScannedBooksList() {
+    return Expanded(
+      child: scannedBooks.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No books scanned yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: scannedBooks.length,
+              itemBuilder: (context, index) {
+                final book = scannedBooks[index];
+                return Card(
+                  elevation: 2,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: ExpansionTile(
+                    leading: CircleAvatar(
+                      backgroundColor: book['availability'] == 'Available'
+                          ? Colors.green[100]
+                          : Colors.red[100],
+                      child: Icon(
+                        Icons.book,
+                        color: book['availability'] == 'Available'
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                    ),
+                    title: Text(
+                      book['title'] ?? 'Unknown Title',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(book['author'] ?? 'Unknown Author'),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildBookDetail('ID', book['biblioId']),
+                            _buildBookDetail('ISBN', book['isbn']),
+                            _buildBookDetail('Status', book['availability']),
+                            _buildBookDetail('Scanned', book['timestamp']),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
+  }
+
+  Widget _buildBookDetail(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          const SizedBox(height: 10),
           Expanded(
-            child: scannedBooks.isEmpty
-                ? const Center(
-                    child: Text('No books scanned yet'),
-                  )
-                : ListView.builder(
-                    itemCount: scannedBooks.length,
-                    itemBuilder: (context, index) {
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 4),
-                        child: ListTile(
-                          title: Text(scannedBooks[index]['title'] ?? 'Unknown Title'),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('ID: ${scannedBooks[index]['biblioId']}'),
-                              Text('Author: ${scannedBooks[index]['author']}'),
-                              Text('ISBN: ${scannedBooks[index]['isbn']}'),
-                              Text(
-                                'Status: ${scannedBooks[index]['availability']}',
-                                style: TextStyle(
-                                  color: scannedBooks[index]['availability'] == 'Available' 
-                                    ? Colors.green 
-                                    : Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text('Timestamp: ${scannedBooks[index]['timestamp']}'),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+            child: Text(
+              value ?? 'N/A',
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
         ],
       ),

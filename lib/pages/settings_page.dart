@@ -11,12 +11,12 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   final _settingsService = SettingsService();
   final TextEditingController _apiUrlController = TextEditingController();
-  final TextEditingController _apiTokenController = TextEditingController();
+  // final TextEditingController _apiTokenController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   String _selectedReaderType = 'USB';
   int _selectedInterval = 1000;
-  bool _notificationsEnabled = true;
+  // bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _visualNotificationsEnabled = true;
 
@@ -28,7 +28,6 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     // Initialize with default or saved values
     _apiUrlController.text = 'http://192.168.1.68:8080/api/v1/';
-    _apiTokenController.text = '**********************';
     _loadSettings();
   }
 
@@ -111,6 +110,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -118,120 +119,187 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          const Text(
-            'Settings',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-
-          _buildEditableField('Koha API URL', _apiUrlController),
-          _buildEditableField('API Token', _apiTokenController),
-
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _usernameController,
-            decoration: const InputDecoration(
-              labelText: 'KOHA Username',
-              border: OutlineInputBorder(),
+          // API Configuration Section
+          _buildSectionHeader('API Configuration', Icons.api),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildEditableField('Koha API URL', _apiUrlController),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
-            obscureText: false,
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _passwordController,
-            decoration: const InputDecoration(
-              labelText: 'KOHA Password',
-              border: OutlineInputBorder(),
+
+          const SizedBox(height: 24),
+
+          // Authentication Section
+          _buildSectionHeader('Authentication', Icons.security),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'KOHA Username',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'KOHA Password',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock),
+                    ),
+                    obscureText: true,
+                  ),
+                ],
+              ),
             ),
-            obscureText: true,
           ),
 
-          const SizedBox(height: 16),
-          const Text(
-            'RFID Reader Type',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          DropdownButton<String>(
-            value: _selectedReaderType,
-            isExpanded: true,
-            items: _readerTypes.map((String type) {
-              return DropdownMenuItem<String>(
-                value: type,
-                child: Text(type),
-              );
-            }).toList(),
-            onChanged: (String? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  _selectedReaderType = newValue;
-                });
-              }
-            },
-          ),
+          const SizedBox(height: 24),
 
-          const SizedBox(height: 16),
-          const Text(
-            'Scan Interval',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          DropdownButton<int>(
-            value: _selectedInterval,
-            isExpanded: true,
-            items: _intervalOptions.map((int interval) {
-              return DropdownMenuItem<int>(
-                value: interval,
-                child: Text('${interval}ms'),
-              );
-            }).toList(),
-            onChanged: (int? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  _selectedInterval = newValue;
-                });
-              }
-            },
-          ),
-
-          const SizedBox(height: 16),
-          SwitchListTile(
-            title: const Text(
-              'Notifications',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          // RFID Reader Configuration
+          _buildSectionHeader('RFID Reader Configuration', Icons.settings_input_antenna),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildDropdownField(
+                    'Reader Type',
+                    _selectedReaderType,
+                    _readerTypes,
+                    (String? value) {
+                      if (value != null) {
+                        setState(() => _selectedReaderType = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDropdownField(
+                    'Scan Interval',
+                    _selectedInterval,
+                    _intervalOptions,
+                    (int? value) {
+                      if (value != null) {
+                        setState(() => _selectedInterval = value);
+                      }
+                    },
+                    suffix: 'ms',
+                  ),
+                ],
+              ),
             ),
-            value: _notificationsEnabled,
-            onChanged: (bool value) {
-              setState(() {
-                _notificationsEnabled = value;
-              });
-            },
           ),
-          SwitchListTile(
-            title: const Text('Sound Notifications'),
-            subtitle: const Text('Play sound when books are found'),
-            value: _soundEnabled,
-            onChanged: (bool value) {
-              setState(() => _soundEnabled = value);
-              _settingsService.setSoundEnabled(value);
-            },
-          ),
-          SwitchListTile(
-            title: const Text('Visual Notifications'),
-            subtitle: const Text('Show pop-up when books are found'),
-            value: _visualNotificationsEnabled,
-            onChanged: (bool value) {
-              setState(() => _visualNotificationsEnabled = value);
-              _settingsService.setVisualNotificationsEnabled(value);
-            },
+
+          const SizedBox(height: 24),
+
+          // Notifications Section
+          _buildSectionHeader('Notifications', Icons.notifications),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Sound Notifications'),
+                  subtitle: const Text('Play sound when books are found'),
+                  secondary: Icon(Icons.volume_up, color: theme.colorScheme.primary),
+                  value: _soundEnabled,
+                  onChanged: (bool value) {
+                    setState(() => _soundEnabled = value);
+                    _settingsService.setSoundEnabled(value);
+                  },
+                ),
+                const Divider(),
+                SwitchListTile(
+                  title: const Text('Visual Notifications'),
+                  subtitle: const Text('Show pop-up when books are found'),
+                  secondary: Icon(Icons.visibility, color: theme.colorScheme.primary),
+                  value: _visualNotificationsEnabled,
+                  onChanged: (bool value) {
+                    setState(() => _visualNotificationsEnabled = value);
+                    _settingsService.setVisualNotificationsEnabled(value);
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 24, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownField<T>(
+    String label,
+    T value,
+    List<T> items,
+    Function(T?) onChanged, {
+    String? suffix,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: DropdownButton<T>(
+              value: value,
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: items.map((T item) {
+                return DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(suffix != null ? '$item$suffix' : item.toString()),
+                );
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   void dispose() {
     _apiUrlController.dispose();
-    _apiTokenController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();

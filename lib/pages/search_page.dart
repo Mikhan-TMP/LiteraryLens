@@ -27,17 +27,20 @@ class _SearchPageState extends State<SearchPage> {
 
     // Visual notification
     if (await settings.isVisualNotificationsEnabled()) {
+      // Check if widget is still mounted before using BuildContext
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Row(
-            children: [
+            children: const [
               Icon(Icons.check_circle, color: Colors.white),
               SizedBox(width: 8),
               Text('Books found!'),
             ],
           ),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -54,6 +57,19 @@ class _SearchPageState extends State<SearchPage> {
     // }
   }
 
+  // 1. Create a method to show snackbar safely
+  void _showSnackBar(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: error ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  // 2. Modify _performSearch method
   Future<void> _performSearch() async {
     if (_searchController.text.isEmpty) return;
 
@@ -70,6 +86,8 @@ class _SearchPageState extends State<SearchPage> {
         _searchType,
       );
 
+      if (!mounted) return;
+
       setState(() {
         _searchResults = results.map((book) => <String, String>{
           'title': book['title']?.toString() ?? '',
@@ -82,12 +100,7 @@ class _SearchPageState extends State<SearchPage> {
       if (results.isNotEmpty) {
         await _notifyBookFound();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No results found for your search criteria.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
+        _showSnackBar('No results found for your search criteria.');
       }
     } catch (e) {
       String errorMessage;
@@ -103,14 +116,9 @@ class _SearchPageState extends State<SearchPage> {
         errorMessage = 'Error: ${e.toString()}';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      _showSnackBar(errorMessage, error: true);
     } finally {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -205,6 +213,8 @@ class _SearchPageState extends State<SearchPage> {
                 onPressed: () async {
                   try {
                     bool isAvailable = await NfcManager.instance.isAvailable();
+                    if (!mounted) return;
+                    
                     if (!isAvailable) {
                       throw Exception('NFC not available');
                     }
@@ -214,58 +224,49 @@ class _SearchPageState extends State<SearchPage> {
                     await NfcManager.instance.startSession(
                       onDiscovered: (NfcTag tag) async {
                         try {
-                          final Map<String, dynamic>? data = tag.data;
-                          if (data != null) {
-                            // Extract and convert the RFID value
-                            String rfidValue = _kohaService.extractIdentifier(data.toString());
-                            
-                            // Extract numeric RFID from debug string
-                            final RegExp rfidRegex = RegExp(r'Corrected RFID: (\d+)');
-                            final match = rfidRegex.firstMatch(rfidValue);
-                            final convertedRfid = match?.group(1) ?? '';
+                          final Map<String, dynamic> data = tag.data;
+                          String rfidValue = _kohaService.extractIdentifier(data.toString());
+                          
+                          final RegExp rfidRegex = RegExp(r'Corrected RFID: (\d+)');
+                          final match = rfidRegex.firstMatch(rfidValue);
+                          final convertedRfid = match?.group(1) ?? '';
 
-                            // Get book data using the RFID
-                            final bookData = await _kohaService.getBookByRfid(convertedRfid);
+                          final bookData = await _kohaService.getBookByRfid(convertedRfid);
+                          
+                          if (!mounted) return;
+                          
+                          if (bookData != null) {
+                            setState(() {
+                              _searchResults = [{
+                                'title': bookData['title']?.toString() ?? '',
+                                'author': bookData['author']?.toString() ?? '',
+                                'isbn': bookData['isbn']?.toString() ?? '',
+                                'biblio_id': bookData['biblio_id']?.toString() ?? '',
+                              }];
+                              _hasSearched = true;
+                            });
                             
-                            if (bookData != null) {
-                              setState(() {
-                                _searchResults = [{
-                                  'title': bookData['title']?.toString() ?? '',
-                                  'author': bookData['author']?.toString() ?? '',
-                                  'isbn': bookData['isbn']?.toString() ?? '',
-                                  'biblio_id': bookData['biblio_id']?.toString() ?? '',
-                                }];
-                                _hasSearched = true;
-                              });
-                              
-                              await _notifyBookFound();
-                            }
+                            await _notifyBookFound();
                           }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                e.toString().contains('RFID not registered') 
-                                  ? 'RFID not registered to any book in the database.'
-                                  : 'Error fetching book data: ${e.toString()}',
-                              ),
-                              backgroundColor: Colors.red,
-                            ),
+                          if (!mounted) return;
+                          _showSnackBar(
+                            e.toString().contains('RFID not registered')
+                              ? 'RFID not registered to any book in the database.'
+                              : 'Error fetching book data: ${e.toString()}',
+                            error: true
                           );
                         } finally {
+                          if (!mounted) return;
                           await NfcManager.instance.stopSession();
                           setState(() => _isLoading = false);
                         }
                       },
                     );
                   } catch (e) {
+                    if (!mounted) return;
                     setState(() => _isLoading = false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
+                    _showSnackBar('Error: ${e.toString()}', error: true);
                   }
                 },
                 icon: _isLoading 
@@ -355,7 +356,7 @@ class _SearchPageState extends State<SearchPage> {
                 icon: const Icon(Icons.location_on),
                 label: const Text('Track Selected Book'),
                 style: ButtonStyle(
-                  minimumSize: MaterialStateProperty.all(
+                  minimumSize: WidgetStateProperty.all(
                     const Size(double.infinity, 48),
                   ),
                 ),
